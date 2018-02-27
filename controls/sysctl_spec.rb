@@ -184,6 +184,7 @@ control 'sysctl-16' do
   describe kernel_parameter('net.ipv4.conf.all.send_redirects') do
     its(:value) { should eq 0 }
   end
+  only_if { sysctl_forwarding == false }
 end
 
 control 'sysctl-17' do
