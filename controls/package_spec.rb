@@ -18,6 +18,11 @@
 # author: Patrick Muench
 
 val_syslog_pkg = attribute('syslog_pkg', default: 'rsyslog', description: 'syslog package to ensure present (default: rsyslog, alternative: syslog-ng...')
+container_execution = begin
+                        virtualization.role == 'guest' && virtualization.system =~ /^(lxc|docker)$/
+                      rescue NoMethodError
+                        false
+                      end
 
 control 'package-01' do
   impact 1.0
@@ -44,7 +49,7 @@ control 'package-03' do
   impact 1.0
   title 'Do not install rsh server'
   desc 'The r-commands suffers same problem as telnet. http://www.nsa.gov/ia/_files/os/redhat/rhel5-guide-i731.pdf, Chapter 3.2.3'
-  describe package('telnetd') do
+  describe package('rsh-server') do
     it { should_not be_installed }
   end
 end
@@ -71,6 +76,10 @@ control 'package-07' do
   impact 1.0
   title 'Install syslog server package'
   desc 'Syslog server is required to receive system and applications logs'
+  # Fedora doesn't install with a syslogger out of the box and instead uses
+  # systemd journal; as there is there is no affinity towards either rsyslog
+  # or syslog-ng, we'll skip this check on Fedora hosts.
+  only_if { os.name != 'fedora' && !container_execution }
   describe package(val_syslog_pkg) do
     it { should be_installed }
   end
@@ -79,8 +88,9 @@ end
 control 'package-08' do
   impact 1.0
   title 'Install auditd'
-  desc 'auditd provides extended logging capacities on recent distribution'
-  audit_pkg = os.redhat? || os.suse? || os.name == 'amazon' ? 'audit' : 'auditd'
+  desc 'auditd provides extended logging capabilities on recent distributions'
+  only_if { !container_execution }
+  audit_pkg = os.redhat? || os.suse? || os.name == 'amazon' || os.name == 'fedora' ? 'audit' : 'auditd'
   describe package(audit_pkg) do
     it { should be_installed }
   end
@@ -88,7 +98,7 @@ control 'package-08' do
     its('log_file') { should cmp '/var/log/audit/audit.log' }
     its('log_format') { should cmp 'raw' }
     its('flush') { should match(/^INCREMENTAL|INCREMENTAL_ASYNC$/) }
-    its('max_log_file_action') { should cmp 'ROTATE' }
+    its('max_log_file_action') { should cmp 'keep_logs' }
     its('space_left') { should cmp 75 }
     its('action_mail_acct') { should cmp 'root' }
     its('space_left_action') { should cmp 'SYSLOG' }
