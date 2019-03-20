@@ -18,6 +18,7 @@
 # author: Patrick Muench
 
 val_syslog_pkg = attribute('syslog_pkg', default: 'rsyslog', description: 'syslog package to ensure present (default: rsyslog, alternative: syslog-ng...')
+xinetd_needed = attribute('xinetd_needed', default: nil, description: 'Hostnames with expicity needed xinetd')
 container_execution = begin
                         virtualization.role == 'guest' && virtualization.system =~ /^(lxc|docker)$/
                       rescue NoMethodError
@@ -28,10 +29,17 @@ control 'package-01' do
   impact 1.0
   title 'Do not run deprecated inetd or xinetd'
   desc 'http://www.nsa.gov/ia/_files/os/redhat/rhel5-guide-i731.pdf, Chapter 3.2.1'
+  
   describe package('inetd') do
     it { should_not be_installed }
   end
+
   describe package('xinetd') do
+
+    before do
+      skip if xinetd_needed.include?(sys_info.hostname)
+    end
+
     it { should_not be_installed }
   end
 end
